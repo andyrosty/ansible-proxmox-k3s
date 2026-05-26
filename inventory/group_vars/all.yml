@@ -1,0 +1,17 @@
+---
+ansible_user: andrew
+ansible_python_interpreter: /usr/bin/python3
+
+timezone: America/New_York
+
+common_packages:
+  - curl
+  - vim
+  - git
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - qemu-guest-agent
+  - net-tools
+  - htop
+  - unzip

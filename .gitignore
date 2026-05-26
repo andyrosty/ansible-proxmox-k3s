@@ -1,0 +1,23 @@
+# Mac OS
+.DS_Store
+
+# Ansible runtime
+.ansible/
+*.retry
+
+# SSH / secrets
+*.pem
+*.key
+*.secret
+.env
+
+# Terraform (future-proofing)
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+
+# IDE
+.vscode/
+.idea/
