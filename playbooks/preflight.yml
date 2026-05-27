@@ -1,0 +1,61 @@
+---
+- name: Preflight check k3s nodes
+  hosts: k3s_cluster
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Show node summary
+      ansible.builtin.debug:
+        msg:
+          - "Hostname: {{ ansible_hostname }}"
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Kernel: {{ ansible_kernel }}"
+          - "CPU cores: {{ ansible_processor_vcpus }}"
+          - "Memory MB: {{ ansible_memtotal_mb }}"
+          - "Default IPv4: {{ ansible_default_ipv4.address | default('none') }}"
+
+    - name: Check default route
+      ansible.builtin.command: ip route
+      changed_when: false
+      register: routes
+
+    - name: Show routes
+      ansible.builtin.debug:
+        var: routes.stdout_lines
+
+    - name: Check swap
+      ansible.builtin.command: swapon --show
+      changed_when: false
+      register: swap_status
+
+    - name: Show swap status
+      ansible.builtin.debug:
+        msg: "{{ swap_status.stdout_lines }}"
+
+    - name: Check installed tools
+      ansible.builtin.shell: "which curl git vim qemu-ga || true"
+      changed_when: false
+      register: installed_tools
+
+    - name: Show installed tools
+      ansible.builtin.debug:
+        var: installed_tools.stdout_lines
+
+    - name: Check Kubernetes kernel modules
+      ansible.builtin.shell: "lsmod | egrep 'br_netfilter|overlay' || true"
+      changed_when: false
+      register: kernel_modules
+
+    - name: Show kernel modules
+      ansible.builtin.debug:
+        var: kernel_modules.stdout_lines
+
+    - name: Check Kubernetes sysctl values
+      ansible.builtin.shell: "sysctl net.bridge.bridge-nf-call-iptables net.ipv4.ip_forward 2>/dev/null || true"
+      changed_when: false
+      register: sysctl_values
+
+    - name: Show sysctl values
+      ansible.builtin.debug:
+        var: sysctl_values.stdout_lines
