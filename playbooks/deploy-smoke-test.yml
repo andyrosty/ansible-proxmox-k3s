@@ -1,0 +1,85 @@
+---
+- name: Deploy Kubernetes smoke test app
+  hosts: k3s_control
+  become: true
+  gather_facts: false
+
+  vars:
+    smoke_test_src_dir: "{{ playbook_dir }}/../kubernetes/smoke-test"
+    smoke_test_remote_dir: /tmp/kubernetes-smoke-test
+
+  tasks:
+    - name: Create remote smoke test manifest directory
+      ansible.builtin.file:
+        path: "{{ smoke_test_remote_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Copy smoke test manifests to control plane
+      ansible.builtin.copy:
+        src: "{{ smoke_test_src_dir }}/"
+        dest: "{{ smoke_test_remote_dir }}/"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Apply smoke test namespace
+      ansible.builtin.command: >
+        k3s kubectl apply -f {{ smoke_test_remote_dir }}/namespace.yaml
+      register: namespace_apply
+      changed_when: "'created' in namespace_apply.stdout or 'configured' in namespace_apply.stdout"
+
+    - name: Wait for smoke test namespace
+      ansible.builtin.command: >
+        k3s kubectl get namespace smoke-test
+      changed_when: false
+      register: namespace_check
+      retries: 10
+      delay: 2
+      until: namespace_check.rc == 0
+
+    - name: Apply smoke test deployment
+      ansible.builtin.command: >
+        k3s kubectl apply -f {{ smoke_test_remote_dir }}/deployment.yaml
+      register: deployment_apply
+      changed_when: "'created' in deployment_apply.stdout or 'configured' in deployment_apply.stdout"
+
+    - name: Apply smoke test service
+      ansible.builtin.command: >
+        k3s kubectl apply -f {{ smoke_test_remote_dir }}/service.yaml
+      register: service_apply
+      changed_when: "'created' in service_apply.stdout or 'configured' in service_apply.stdout"
+
+    - name: Show apply results
+      ansible.builtin.debug:
+        msg:
+          - "{{ namespace_apply.stdout }}"
+          - "{{ deployment_apply.stdout }}"
+          - "{{ service_apply.stdout }}"
+
+    - name: Wait for smoke test deployment rollout
+      ansible.builtin.command: >
+        k3s kubectl rollout status deployment/nginx-smoke-test -n smoke-test --timeout=180s
+      changed_when: false
+
+    - name: Show smoke test pods
+      ansible.builtin.command: >
+        k3s kubectl get pods -n smoke-test -o wide
+      changed_when: false
+      register: smoke_test_pods
+
+    - name: Display smoke test pods
+      ansible.builtin.debug:
+        var: smoke_test_pods.stdout_lines
+
+    - name: Show smoke test service
+      ansible.builtin.command: >
+        k3s kubectl get svc -n smoke-test
+      changed_when: false
+      register: smoke_test_service
+
+    - name: Display smoke test service
+      ansible.builtin.debug:
+        var: smoke_test_service.stdout_lines
