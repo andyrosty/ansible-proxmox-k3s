@@ -1,0 +1,7 @@
+---
+flux_github_owner: "andyrosty"
+flux_github_repository: "homelab-services"
+flux_github_branch: "main"
+flux_cluster_path: "clusters/homelab"
+flux_personal_repo: true
+flux_token_auth: true

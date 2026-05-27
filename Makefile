@@ -1,4 +1,4 @@
-.PHONY: ping inventory preflight bootstrap install-k3s status deploy-smoke delete-smoke reset-k3s
+.PHONY: ping inventory preflight bootstrap install-k3s install-flux status deploy-smoke delete-smoke reset-k3s
 
 ping:
 	ansible all -m ping
@@ -26,3 +26,9 @@ delete-smoke:
 
 reset-k3s:
 	ansible-playbook playbooks/reset-k3s.yml
+
+site:
+	ansible-playbook playbooks/site.yml
+
+install-flux:
+	ansible-playbook playbooks/install-flux.yml -e github_token="$(GITHUB_TOKEN)"

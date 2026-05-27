@@ -1,0 +1,12 @@
+---
+- name: Run preflight checks
+  ansible.builtin.import_playbook: preflight.yml
+
+- name: Bootstrap Ubuntu nodes
+  ansible.builtin.import_playbook: bootstrap.yml
+
+- name: Install k3s cluster
+  ansible.builtin.import_playbook: install-k3s.yml
+
+- name: Check cluster status
+  ansible.builtin.import_playbook: cluster-status.yml
