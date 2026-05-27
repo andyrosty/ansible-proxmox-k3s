@@ -9,6 +9,7 @@ This repo does not install k3s yet. It gets the nodes ready first.
 - `inventory/hosts.ini` — cluster inventory
 - `playbooks/preflight.yml` — read-only host checks
 - `playbooks/bootstrap.yml` — host prep for Kubernetes
+- `playbooks/cluster-status.yml` — quick cluster health snapshot
 - `requirements.yml` — required Ansible collection
 
 ## Requirements
@@ -74,6 +75,12 @@ Bootstrap the nodes:
 
 ```bash
 ansible-playbook playbooks/bootstrap.yml
+```
+
+Check cluster health (shows nodes, pods, and services):
+
+```bash
+ansible-playbook playbooks/cluster-status.yml
 ```
 
 ## What bootstrap does

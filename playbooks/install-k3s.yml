@@ -1,0 +1,108 @@
+---
+- name: Install k3s server on control plane
+  hosts: k3s_control
+  become: true
+  gather_facts: true
+
+  vars:
+    k3s_install_script_url: https://get.k3s.io
+    k3s_server_options: "--write-kubeconfig-mode 644 --disable traefik"
+
+  tasks:
+    - name: Download k3s install script
+      ansible.builtin.get_url:
+        url: "{{ k3s_install_script_url }}"
+        dest: /tmp/install-k3s.sh
+        mode: "0755"
+
+    - name: Install k3s server
+      ansible.builtin.command: >
+        /tmp/install-k3s.sh server {{ k3s_server_options }}
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Wait for k3s server to be ready
+      ansible.builtin.command: k3s kubectl get nodes
+      register: k3s_nodes
+      retries: 20
+      delay: 6
+      until: k3s_nodes.rc == 0
+      changed_when: false
+
+    - name: Read k3s node token
+      ansible.builtin.slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: k3s_token_raw
+
+    - name: Save k3s token as fact
+      ansible.builtin.set_fact:
+        k3s_token: "{{ k3s_token_raw.content | b64decode | trim }}"
+
+    - name: Show control plane status
+      ansible.builtin.command: k3s kubectl get nodes -o wide
+      changed_when: false
+      register: control_plane_status
+
+    - name: Display control plane status
+      ansible.builtin.debug:
+        var: control_plane_status.stdout_lines
+
+
+- name: Install k3s agents on worker nodes
+  hosts: k3s_workers
+  become: true
+  gather_facts: true
+
+  vars:
+    k3s_install_script_url: https://get.k3s.io
+    k3s_server_ip: "{{ hostvars[groups['k3s_control'][0]].ansible_host }}"
+    k3s_token: "{{ hostvars[groups['k3s_control'][0]].k3s_token }}"
+
+  tasks:
+    - name: Download k3s install script
+      ansible.builtin.get_url:
+        url: "{{ k3s_install_script_url }}"
+        dest: /tmp/install-k3s.sh
+        mode: "0755"
+
+    - name: Install k3s agent
+      ansible.builtin.command: >
+        /tmp/install-k3s.sh agent
+      environment:
+        K3S_URL: "https://{{ k3s_server_ip }}:6443"
+        K3S_TOKEN: "{{ k3s_token }}"
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Ensure k3s-agent service is running
+      ansible.builtin.systemd:
+        name: k3s-agent
+        state: started
+        enabled: true
+
+
+- name: Verify full k3s cluster
+  hosts: k3s_control
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Wait for all nodes to register
+      ansible.builtin.command: k3s kubectl get nodes
+      register: final_nodes
+      retries: 20
+      delay: 6
+      until:
+        - final_nodes.rc == 0
+        - "'k3s-worker-01' in final_nodes.stdout"
+        - "'k3s-worker-02' in final_nodes.stdout"
+      changed_when: false
+
+    - name: Show final node status
+      ansible.builtin.command: k3s kubectl get nodes -o wide
+      changed_when: false
+      register: final_node_status
+
+    - name: Display final node status
+      ansible.builtin.debug:
+        var: final_node_status.stdout_lines
