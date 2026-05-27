@@ -1,15 +1,18 @@
 # ansible-proxmox-k3s
 
-Ansible playbooks to prepare Ubuntu VMs on Proxmox for a k3s cluster.
+Ansible playbooks to prepare Ubuntu VMs on Proxmox for k3s, install the cluster, and deploy a small smoke test workload.
 
-This repo does not install k3s yet. It gets the nodes ready first.
+## What's inside
 
-## Files
-
+- `Makefile` — shortcuts for the most common Ansible commands
 - `inventory/hosts.ini` — cluster inventory
+- `inventory/group_vars/` — place for shared variables such as `common_packages`
 - `playbooks/preflight.yml` — read-only host checks
 - `playbooks/bootstrap.yml` — host prep for Kubernetes
+- `playbooks/install-k3s.yml` — installs the control plane and workers
 - `playbooks/cluster-status.yml` — quick cluster health snapshot
+- `playbooks/deploy-smoke-test.yml` / `playbooks/delete-smoke-test.yml` — manage the demo app
+- `kubernetes/smoke-test/` — Kubernetes manifests used by the smoke test
 - `requirements.yml` — required Ansible collection
 
 ## Requirements
@@ -57,31 +60,37 @@ common_packages:
   - ca-certificates
 ```
 
-## Usage
+## Running the playbooks
 
-Test connectivity:
+The `Makefile` wraps the common commands so you do not have to remember each playbook path.
 
-```bash
-ansible k3s_cluster -m ping
-```
+| Target | Description |
+| --- | --- |
+| `make ping` | `ansible all -m ping` for a quick reachability test |
+| `make inventory` | Graphs the inventory to verify host grouping |
+| `make preflight` | Runs `playbooks/preflight.yml` to gather read-only health info |
+| `make bootstrap` | Runs `playbooks/bootstrap.yml` to prep every node for k3s |
+| `make install-k3s` | Runs `playbooks/install-k3s.yml` to install the control plane and workers |
+| `make status` | Runs `playbooks/cluster-status.yml` for node/pod/service snapshots |
+| `make deploy-smoke` | Applies the manifests in `kubernetes/smoke-test` via `playbooks/deploy-smoke-test.yml` |
+| `make delete-smoke` | Cleans up the smoke test namespace with `playbooks/delete-smoke-test.yml` |
 
-Run preflight checks:
-
-```bash
-ansible-playbook playbooks/preflight.yml
-```
-
-Bootstrap the nodes:
-
-```bash
-ansible-playbook playbooks/bootstrap.yml
-```
-
-Check cluster health (shows nodes, pods, and services):
+A typical workflow after populating the inventory is:
 
 ```bash
-ansible-playbook playbooks/cluster-status.yml
+make ping
+make preflight
+make bootstrap
+make install-k3s
+make status
+make deploy-smoke # optional validation app
 ```
+
+All targets simply wrap `ansible` or `ansible-playbook`, so you can still invoke the commands directly if preferred.
+
+## Smoke test manifests
+
+`kubernetes/smoke-test/` holds a minimal namespace, deployment, and service that deploy an NGINX pod set labelled for homelab testing. The deploy/delete playbooks copy these files to the control plane and run `k3s kubectl apply/ delete`. Modify the manifests to fit your own validation workload if desired.
 
 ## What bootstrap does
 

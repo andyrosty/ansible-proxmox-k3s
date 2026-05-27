@@ -1,0 +1,15 @@
+---
+- name: Delete Kubernetes smoke test app
+  hosts: k3s_control
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Delete smoke test namespace
+      ansible.builtin.command: k3s kubectl delete namespace smoke-test --ignore-not-found=true
+      register: delete_result
+      changed_when: "'deleted' in delete_result.stdout"
+
+    - name: Show delete result
+      ansible.builtin.debug:
+        var: delete_result.stdout_lines
