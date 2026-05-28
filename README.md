@@ -2,8 +2,6 @@
 
 End‑to‑end Ansible automation to prepare Ubuntu VMs on Proxmox, install a multi‑node k3s cluster, and bootstrap FluxCD GitOps from a GitHub repository.
 
-This is no longer just a "smoke test" playbook – it is a full k3s cluster installer with an opinionated Flux setup and a convenience `site.yml` orchestration playbook.
-
 ---
 
 ## Repository layout
