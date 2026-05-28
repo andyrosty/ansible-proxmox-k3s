@@ -136,6 +136,7 @@ The `Makefile` wraps the most common operations so you do not have to remember t
 
 | Target | Command | Description |
 | --- | --- | --- |
+| `make configure-cert-manager-secrets` | `ansible-playbook playbooks/configure-cert-manager-secrets.yml -e cloudflare_api_token="$(CLOUDFLARE_API_TOKEN)"` | Create/update Cloudflare API token secret for cert-manager |
 | `make ping` | `ansible all -m ping` | Quick reachability test |
 | `make inventory` | `ansible-inventory --graph` | Verify inventory and groups |
 | `make preflight` | `ansible-playbook playbooks/preflight.yml` | Read‑only health checks on all nodes |
@@ -146,13 +147,13 @@ The `Makefile` wraps the most common operations so you do not have to remember t
 | `make deploy-smoke` | `ansible-playbook playbooks/deploy-smoke-test.yml` | Deploy the NGINX smoke‑test app |
 | `make delete-smoke` | `ansible-playbook playbooks/delete-smoke-test.yml` | Remove the smoke‑test app |
 | `make install-flux` | `ansible-playbook playbooks/install-flux.yml -e github_token="$(GITHUB_TOKEN)"` | Install Flux CLI and bootstrap Flux against GitHub |
-| `make site` | `ansible-playbook playbooks/site.yml -e github_token="$(GITHUB_TOKEN)"` | End‑to‑end run: preflight → bootstrap → k3s → Flux → checks |
+| `make site` | `ansible-playbook playbooks/site.yml -e github_token="$(GITHUB_TOKEN)" -e cloudflare_api_token="$(CLOUDFLARE_API_TOKEN)"` | End‑to‑end run: preflight → bootstrap → k3s → cert-manager secret → Flux → checks |
 
 All targets simply wrap `ansible` or `ansible-playbook`, so you can always run the equivalent commands manually.
 
 ### Running the full site playbook
 
-After inventory and variables are in place and `GITHUB_TOKEN` is exported, you can run an end‑to‑end cluster + Flux install with:
+After inventory and variables are in place and both `GITHUB_TOKEN` and `CLOUDFLARE_API_TOKEN` are exported, you can run an end‑to‑end cluster + Flux install with:
 
 ```bash
 make site
@@ -161,7 +162,7 @@ make site
 or equivalently:
 
 ```bash
-ansible-playbook playbooks/site.yml -e github_token="$GITHUB_TOKEN"
+ansible-playbook playbooks/site.yml -e github_token="$GITHUB_TOKEN" -e cloudflare_api_token="$CLOUDFLARE_API_TOKEN"
 ```
 
 This runs, in order:
@@ -170,9 +171,17 @@ This runs, in order:
 2. `bootstrap.yml`
 3. `install-k3s.yml`
 4. `cluster-status.yml`
-5. `install-flux.yml`
-6. `cluster-status.yml` (post‑Flux)
-7. `storage-status.yml`
+5. `configure-cert-manager-secrets.yml`
+6. `install-flux.yml`
+7. `cluster-status.yml` (post‑Flux)
+8. `storage-status.yml`
+
+Before running any playbooks that interact with GitHub or Cloudflare, export the required tokens on your control machine:
+
+```bash
+export GITHUB_TOKEN="<your-github-token>"
+export CLOUDFLARE_API_TOKEN="<your-cloudflare-token>"
+```
 
 ### Installing Flux only
 

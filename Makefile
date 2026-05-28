@@ -28,7 +28,13 @@ reset-k3s:
 	ansible-playbook playbooks/reset-k3s.yml
 
 site:
-	ansible-playbook playbooks/site.yml -e github_token="$(GITHUB_TOKEN)"
+	ansible-playbook playbooks/site.yml \
+    	-e github_token="$(GITHUB_TOKEN)" \
+		-e cloudflare_api_token="$(CLOUDFLARE_API_TOKEN)"
+
+configure-cert-manager-secrets:
+	ansible-playbook playbooks/configure-cert-manager-secrets.yml \
+		-e cloudflare_api_token="$(CLOUDFLARE_API_TOKEN)"
 
 install-flux:
 	ansible-playbook playbooks/install-flux.yml -e github_token="$(GITHUB_TOKEN)"
