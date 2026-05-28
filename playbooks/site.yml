@@ -10,3 +10,12 @@
 
 - name: Check cluster status
   ansible.builtin.import_playbook: cluster-status.yml
+
+- name: Install Flux GitOps
+  ansible.builtin.import_playbook: install-flux.yml
+
+- name: Check cluster status
+  ansible.builtin.import_playbook: cluster-status.yml
+
+- name: Check storage status
+  ansible.builtin.import_playbook: storage-status.yml

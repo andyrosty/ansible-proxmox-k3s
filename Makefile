@@ -28,7 +28,7 @@ reset-k3s:
 	ansible-playbook playbooks/reset-k3s.yml
 
 site:
-	ansible-playbook playbooks/site.yml
+	ansible-playbook playbooks/site.yml -e github_token="$(GITHUB_TOKEN)"
 
 install-flux:
 	ansible-playbook playbooks/install-flux.yml -e github_token="$(GITHUB_TOKEN)"

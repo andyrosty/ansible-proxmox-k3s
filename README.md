@@ -1,106 +1,220 @@
 # ansible-proxmox-k3s
 
-Ansible playbooks to prepare Ubuntu VMs on Proxmox for k3s, install the cluster, and deploy a small smoke test workload.
+End‑to‑end Ansible automation to prepare Ubuntu VMs on Proxmox, install a multi‑node k3s cluster, and bootstrap FluxCD GitOps from a GitHub repository.
 
-## What's inside
+This is no longer just a "smoke test" playbook – it is a full k3s cluster installer with an opinionated Flux setup and a convenience `site.yml` orchestration playbook.
+
+---
+
+## Repository layout
 
 - `Makefile` — shortcuts for the most common Ansible commands
-- `inventory/hosts.ini` — cluster inventory
-- `inventory/group_vars/` — place for shared variables such as `common_packages`
-- `playbooks/preflight.yml` — read-only host checks
+- `inventory/hosts.ini` — cluster inventory (control plane + workers)
+- `inventory/group_vars/all.yml` — global settings, SSH user, common packages, timezone
+- `inventory/group_vars/flux.yml` — FluxCD / GitHub bootstrap settings
+- `playbooks/site.yml` — end‑to‑end run: preflight → bootstrap → k3s → Flux → checks
+- `playbooks/preflight.yml` — read‑only host checks
 - `playbooks/bootstrap.yml` — host prep for Kubernetes
-- `playbooks/install-k3s.yml` — installs the control plane and workers
+- `playbooks/install-k3s.yml` — installs the k3s control plane and workers
 - `playbooks/cluster-status.yml` — quick cluster health snapshot
+- `playbooks/storage-status.yml` — storage / PVC overview
+- `playbooks/install-flux.yml` — installs Flux CLI and bootstraps Flux against GitHub
 - `playbooks/deploy-smoke-test.yml` / `playbooks/delete-smoke-test.yml` — manage the demo app
 - `kubernetes/smoke-test/` — Kubernetes manifests used by the smoke test
-- `requirements.yml` — required Ansible collection
+- `requirements.yml` — required Ansible collection(s)
+
+---
 
 ## Requirements
 
 - Ansible on your control machine
-- SSH access to the Ubuntu nodes
-- a remote user with `sudo`
-- Python on the target hosts
+- SSH access to the Ubuntu nodes from the control machine
+- A remote user with `sudo` access
+- Python 3 on the target hosts
+- A GitHub account and a GitHub Personal Access Token (PAT) with permissions for the Flux bootstrap repo
 
-Install the collection:
+Install the Ansible collection(s):
 
 ```bash
 ansible-galaxy collection install -r requirements.yml
 ```
 
-## Setup
+---
 
-### 1. Update inventory
+## Inventory and variables
 
-Edit `inventory/hosts.ini` with your control-plane and worker IPs.
+### 1. Inventory: hosts and groups
 
-### 2. Set the SSH user if needed
-
-`ansible.cfg` defaults to:
+Edit `inventory/hosts.ini` with your actual hostnames/IPs:
 
 ```ini
-remote_user = andrew
+[k3s_control]
+k3s-control-01 ansible_host=192.168.50.147
+
+[k3s_workers]
+k3s-worker-01 ansible_host=192.168.50.132
+k3s-worker-02 ansible_host=192.168.50.110
+
+[k3s_cluster:children]
+k3s_control
+k3s_workers
 ```
 
-Change it if your SSH username is different.
+You can rename hosts or add more workers as needed; just keep the `k3s_control` and `k3s_workers` groups intact.
 
-### 3. Define `common_packages`
+### 2. Global settings (`inventory/group_vars/all.yml`)
 
-`playbooks/bootstrap.yml` expects a `common_packages` variable.
-
-Create `inventory/group_vars/k3s_cluster.yml`:
+`all.yml` defines the SSH user, Python interpreter, timezone, and the baseline packages that will be installed on every node:
 
 ```yaml
+ansible_user: andrew
+ansible_python_interpreter: /usr/bin/python3
+
+timezone: America/New_York
+
 common_packages:
   - curl
-  - git
   - vim
-  - qemu-guest-agent
-  - apt-transport-https
+  - git
   - ca-certificates
+  - gnupg
+  - lsb-release
+  - qemu-guest-agent
+  - net-tools
+  - htop
+  - unzip
 ```
+
+Update `ansible_user`, `timezone`, and the package list to match your environment.
+
+### 3. Flux / GitHub settings (`inventory/group_vars/flux.yml`)
+
+Flux bootstrap is configured via `inventory/group_vars/flux.yml`:
+
+```yaml
+flux_github_owner: "andyrosty"        # GitHub user or org
+flux_github_repository: "homelab-services"
+flux_github_branch: "main"
+flux_cluster_path: "clusters/homelab" # path inside the repo for this cluster
+flux_personal_repo: true               # true if this is a user repo instead of org
+flux_token_auth: true                  # use token auth (recommended)
+```
+
+Change these values to point to your own GitHub owner/repo/branch and desired cluster path.
+
+---
+
+## GitHub token for Flux
+
+Flux bootstrapping requires a GitHub Personal Access Token (PAT). The playbooks assume you will provide it via an Ansible extra var called `github_token` and usually set it via an environment variable `GITHUB_TOKEN`.
+
+### 1. Create a GitHub PAT
+
+In GitHub:
+
+1. Go to **Settings → Developer settings → Personal access tokens**.
+2. Create a **fine‑grained** or **classic** token.
+3. Grant it access to the repository defined in `flux.yml` (owner + repo).
+4. As a minimum, ensure it has permissions to:
+   - Read/write **Contents**
+   - Read/write **Metadata** / **Administration** of that repo (depending on the token type)
+5. Copy the generated token.
+
+On your local machine, export it as an environment variable (so it does not end up in your shell history):
+
+```bash
+export GITHUB_TOKEN="<your-token-here>"
+```
+
+Make sure you do not commit this value into version control.
+
+---
 
 ## Running the playbooks
 
-The `Makefile` wraps the common commands so you do not have to remember each playbook path.
+The `Makefile` wraps the most common operations so you do not have to remember the full `ansible-playbook` commands.
 
-| Target | Description |
-| --- | --- |
-| `make ping` | `ansible all -m ping` for a quick reachability test |
-| `make inventory` | Graphs the inventory to verify host grouping |
-| `make preflight` | Runs `playbooks/preflight.yml` to gather read-only health info |
-| `make bootstrap` | Runs `playbooks/bootstrap.yml` to prep every node for k3s |
-| `make install-k3s` | Runs `playbooks/install-k3s.yml` to install the control plane and workers |
-| `make status` | Runs `playbooks/cluster-status.yml` for node/pod/service snapshots |
-| `make deploy-smoke` | Applies the manifests in `kubernetes/smoke-test` via `playbooks/deploy-smoke-test.yml` |
-| `make delete-smoke` | Cleans up the smoke test namespace with `playbooks/delete-smoke-test.yml` |
+### Make targets
 
-A typical workflow after populating the inventory is:
+| Target | Command | Description |
+| --- | --- | --- |
+| `make ping` | `ansible all -m ping` | Quick reachability test |
+| `make inventory` | `ansible-inventory --graph` | Verify inventory and groups |
+| `make preflight` | `ansible-playbook playbooks/preflight.yml` | Read‑only health checks on all nodes |
+| `make bootstrap` | `ansible-playbook playbooks/bootstrap.yml` | OS prep for k3s (packages, kernel settings, swap off, etc.) |
+| `make install-k3s` | `ansible-playbook playbooks/install-k3s.yml` | Install k3s control plane and workers |
+| `make status` | `ansible-playbook playbooks/cluster-status.yml` | Node/pod/service snapshot |
+| `make storage-status` | `ansible-playbook playbooks/storage-status.yml` | Cluster storage / PVC status |
+| `make deploy-smoke` | `ansible-playbook playbooks/deploy-smoke-test.yml` | Deploy the NGINX smoke‑test app |
+| `make delete-smoke` | `ansible-playbook playbooks/delete-smoke-test.yml` | Remove the smoke‑test app |
+| `make install-flux` | `ansible-playbook playbooks/install-flux.yml -e github_token="$(GITHUB_TOKEN)"` | Install Flux CLI and bootstrap Flux against GitHub |
+| `make site` | `ansible-playbook playbooks/site.yml -e github_token="$(GITHUB_TOKEN)"` | End‑to‑end run: preflight → bootstrap → k3s → Flux → checks |
+
+All targets simply wrap `ansible` or `ansible-playbook`, so you can always run the equivalent commands manually.
+
+### Running the full site playbook
+
+After inventory and variables are in place and `GITHUB_TOKEN` is exported, you can run an end‑to‑end cluster + Flux install with:
 
 ```bash
-make ping
-make preflight
-make bootstrap
-make install-k3s
-make status
-make deploy-smoke # optional validation app
+make site
 ```
 
-All targets simply wrap `ansible` or `ansible-playbook`, so you can still invoke the commands directly if preferred.
+or equivalently:
+
+```bash
+ansible-playbook playbooks/site.yml -e github_token="$GITHUB_TOKEN"
+```
+
+This runs, in order:
+
+1. `preflight.yml`
+2. `bootstrap.yml`
+3. `install-k3s.yml`
+4. `cluster-status.yml`
+5. `install-flux.yml`
+6. `cluster-status.yml` (post‑Flux)
+7. `storage-status.yml`
+
+### Installing Flux only
+
+If k3s is already installed and working and you only want to (re)bootstrap Flux:
+
+```bash
+ansible-playbook playbooks/install-flux.yml -e github_token="$GITHUB_TOKEN"
+```
+
+or via Make:
+
+```bash
+make install-flux
+```
+
+---
 
 ## Smoke test manifests
 
-`kubernetes/smoke-test/` holds a minimal namespace, deployment, and service that deploy an NGINX pod set labelled for homelab testing. The deploy/delete playbooks copy these files to the control plane and run `k3s kubectl apply/ delete`. Modify the manifests to fit your own validation workload if desired.
+`kubernetes/smoke-test/` holds a minimal namespace, deployment, and service that deploy an NGINX pod set labeled for homelab testing. The deploy/delete playbooks copy these files to the control plane and run `k3s kubectl apply` / `k3s kubectl delete` against the cluster.
+
+Use the smoke test to validate that basic scheduling, service routing, and your storage setup behave as expected after a fresh install.
+
+---
 
 ## What bootstrap does
 
-- updates APT cache
-- installs `common_packages`
-- disables swap
-- enables `overlay` and `br_netfilter`
-- applies Kubernetes sysctl settings
-- starts `qemu-guest-agent` if available
+`playbooks/bootstrap.yml` is responsible for preparing each Ubuntu node for k3s. At a high level it:
+
+- Updates APT cache
+- Installs `common_packages`
+- Configures the system timezone
+- Disables swap
+- Enables the `overlay` and `br_netfilter` kernel modules
+- Applies Kubernetes‑recommended sysctl settings
+- Ensures `qemu-guest-agent` is installed and started (when applicable)
+
+---
 
 ## License
 
 MIT — see `LICENSE`.
+
