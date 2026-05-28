@@ -1,4 +1,4 @@
-.PHONY: ping inventory preflight bootstrap install-k3s install-flux status deploy-smoke delete-smoke reset-k3s
+.PHONY: ping inventory preflight bootstrap install-k3s install-flux status storage-status deploy-smoke delete-smoke reset-k3s
 
 ping:
 	ansible all -m ping
@@ -32,3 +32,6 @@ site:
 
 install-flux:
 	ansible-playbook playbooks/install-flux.yml -e github_token="$(GITHUB_TOKEN)"
+
+storage-status:
+	ansible-playbook playbooks/storage-status.yml

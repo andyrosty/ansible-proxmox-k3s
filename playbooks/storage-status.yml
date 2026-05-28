@@ -1,0 +1,46 @@
+---
+- name: Check Kubernetes storage status
+  hosts: k3s_control
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Show storage classes
+      ansible.builtin.command: k3s kubectl get storageclass
+      changed_when: false
+      register: storage_classes
+
+    - name: Display storage classes
+      ansible.builtin.debug:
+        var: storage_classes.stdout_lines
+
+    - name: Show default storage class details
+      ansible.builtin.command: k3s kubectl describe storageclass local-path
+      changed_when: false
+      register: local_path_details
+
+    - name: Display default storage class details
+      ansible.builtin.debug:
+        var: local_path_details.stdout_lines
+
+    - name: Check local-path provisioner pod
+      ansible.builtin.command: >
+        k3s kubectl get pods -n kube-system
+        -l app=local-path-provisioner
+        -o wide
+      changed_when: false
+      register: local_path_pods
+
+    - name: Display local-path provisioner pod
+      ansible.builtin.debug:
+        var: local_path_pods.stdout_lines
+
+    - name: Show PVCs across all namespaces
+      ansible.builtin.command: k3s kubectl get pvc -A
+      changed_when: false
+      register: pvcs
+      failed_when: false
+
+    - name: Display PVCs
+      ansible.builtin.debug:
+        var: pvcs.stdout_lines
